@@ -25,7 +25,9 @@ typedef struct out
 } Out;
 
 #define EOF_CODE 0
-#define MALLOC_SIZE 1000
+#define MALLOC_SIZE 10000
+#define DICT_START 0
+#define DICT_END 127
 void addDictEntry(Dict *dict, char *string, int code)
 {
 	if (dict == NULL)
@@ -61,16 +63,15 @@ void initDict(Dict *dict)
 	dict->num = 0;
 	dict->root = NULL;
 	char i = 0;
-	for (i = 0; i < 127; i++)
+	for (i = DICT_START; i < DICT_END; i++)
 	{
 		char c[2];
 		c[0] = i;
 		c[1] = 0;
 		addDictEntry(dict, c, -1);
 	}
-	
-	addDictEntry(dict, 0, EOF_CODE);
 
+	addDictEntry(dict, 0, EOF_CODE);
 }
 
 void removeNode(Entry *node)
@@ -117,6 +118,10 @@ void printDict(Dict *dict)
 	printf("\n}\n");
 }
 
+void setString(char *dest, char *src)
+{
+	strcpy(dest, src);
+}
 void printOutput(Out **output, int size)
 {
 	int i = 0;
@@ -128,7 +133,7 @@ void printOutput(Out **output, int size)
 	printf(")\n");
 }
 
-int getEntryString(Dict *dict, char *text)
+int getEntryString(Dict *dict, char *text, int *length)
 {
 	if (dict == NULL)
 		return 0;
@@ -137,6 +142,7 @@ int getEntryString(Dict *dict, char *text)
 	{
 		if (node->code != EOF_CODE && strcmp(node->string, text) == 0)
 		{
+			*length = strlen(node->string);
 			return node->code;
 		}
 		node = node->next;
@@ -144,7 +150,46 @@ int getEntryString(Dict *dict, char *text)
 	return 0;
 }
 
-char* getEntryIndex(Dict *dict, int index)
+void reverseString(char *str)
+{
+	int length = strlen(str);
+	int i, j;
+	char *aux = malloc(length);
+	for (i = 0, j = length - 1; i < length; i++, j--)
+	{
+		aux[i] = str[j];
+	}
+	aux[i] = 0;
+	strcpy(str, aux);
+	free(aux);
+	aux = NULL;
+}
+
+int getReverseEntryString(Dict *dict, char *text, int *length)
+{
+	if (dict == NULL)
+		return 0;
+	Entry *node = dict->root;
+	// printf("\nString: %s", text);
+	char *tmp = malloc(strlen(text));
+	setString(tmp, text);
+	reverseString(tmp);
+	// printf("\nReverse: %s", text);
+	while (node->next != NULL)
+	{
+		if (node->code != EOF_CODE && strcmp(node->string, tmp) == 0)
+		{
+			*length = strlen(node->string);
+			free(tmp);
+			return node->code;
+		}
+		node = node->next;
+	}
+	free(tmp);
+	return 0;
+}
+
+char *getEntryIndex(Dict *dict, int index)
 {
 	if (dict == NULL)
 		return 0;
@@ -153,68 +198,91 @@ char* getEntryIndex(Dict *dict, int index)
 	{
 		if (node->code == index)
 		{
-			return node->string;
+			char* temp = malloc(strlen(node->string));
+			setString(temp, node->string);
+			return temp;
 		}
 		node = node->next;
 	}
 	return NULL;
 }
 
-void concat(char* dest,char* src1, char* src2){
-	strcpy(dest,src1);
-	strcat(dest,src2);
+void concat(char *dest, char *src1, char *src2)
+{
+	strcpy(dest, src1);
+	strcat(dest, src2);
 }
 
-void concatCharOnString(char* src, char dest){
-	char* tmp = malloc(2);
-	tmp[0] = dest;
+void concatCharOnString(char *dest, char src)
+{
+	char *tmp = malloc(2);
+	tmp[0] = src;
 	tmp[1] = 0;
-	strcat(src,tmp);
+	strcat(dest, tmp);
 	free(tmp);
 }
-void setString(char* dest, char*src){
-	strcpy(dest, src);
-	
-}
 
-void setCharOnString(char*dest, char src){
+void setCharOnString(char *dest, char src)
+{
 	dest[0] = src;
 	dest[1] = 0;
 }
 
-Out* initOut(int code,int flag){
-	Out* out = (Out *)malloc(sizeof(Out));
+Out *initOut(int code, int flag)
+{
+	Out *out = (Out *)malloc(sizeof(Out));
 	out->index = code;
-	out->flag = 0;
+	out->flag = flag;
 	return out;
 }
 
-Out** encode(Dict *dict, char *text)
+Out **encode(Dict *dict, char *text)
 {
 	char *prefix = malloc(MALLOC_SIZE);
 	char *currentChar = malloc(MALLOC_SIZE);
 	char *word = malloc(MALLOC_SIZE);
-	Out** output = (Out**) malloc(sizeof(Out*) * MALLOC_SIZE);
+	Out **output = (Out **)malloc(sizeof(Out *) * MALLOC_SIZE);
 	int code = 0;
 	int cont = 0;
+	int forwardMatch = 0;
+	int reverseMatch = 0;
+	int forwardMatchSize = 0;
+	int reverseMatchSize = 0;
+	int flag = 0;
 	prefix[0] = text[0];
 	setCharOnString(prefix, *text);
-	
-	currentChar[0] =0;
-	while(*text != 0)
+
+	currentChar[0] = 0;
+	while (*text != 0)
 	{
-		concat(word,prefix,currentChar);
-		int tempCode = getEntryString(dict, word);
-		if (tempCode)
+		concat(word, prefix, currentChar);
+		int forwardMatch = getEntryString(dict, word, &forwardMatchSize);
+		//printf("\nReverse Match: %d", reverseMatch);
+
+		int reverseMatch = getReverseEntryString(dict, word, &reverseMatchSize);
+
+		if (forwardMatch || reverseMatch)
 		{
+			if (reverseMatchSize > forwardMatchSize)
+			{
+				flag = 1;
+				code = reverseMatch;
+			}
+			else
+			{
+				flag = 0;
+				code = forwardMatch;
+			}
+			reverseMatchSize = forwardMatchSize = 0;
+			forwardMatch = reverseMatch = 0;
 			setString(prefix, word);
 			text++;
-			setCharOnString(currentChar,*text);
-			code = tempCode;
-			if(*currentChar == 0){
-			output[cont] = initOut(code,0);
-			cont++;
-			break;
+			setCharOnString(currentChar, *text);
+			if (*currentChar == 0)
+			{
+				output[cont] = initOut(code, flag);
+				cont++;
+				break;
 			}
 		}
 		else
@@ -222,16 +290,18 @@ Out** encode(Dict *dict, char *text)
 			addDictEntry(dict, word, -1);
 			setString(prefix, currentChar);
 			setCharOnString(currentChar, 0);
-			output[cont] = initOut(code,0);
+			//printf("\nMatch: %d, reverse: %d", code, flag);
+
+			output[cont] = initOut(code, flag);
+			flag = 0;
 			cont++;
 		}
-		
 	}
 
-	output[cont] = initOut(EOF_CODE,0);	
+	output[cont] = initOut(EOF_CODE, 0);
 	cont++;
 	printDict(dict);
-	printOutput(output, cont);
+	// printOutput(output, cont);
 	return output;
 }
 
@@ -239,12 +309,13 @@ void decode(Dict *dict, Out **input)
 {
 	int oldCode;
 	int code = (*input)->index;
-	char* word = getEntryIndex(dict,code);
-	char* oldWord = malloc(MALLOC_SIZE);
+	char *word = getEntryIndex(dict, code);
+	char *oldWord = malloc(MALLOC_SIZE);
 	setString(oldWord, word);
-	char* output = malloc(MALLOC_SIZE);
+	char *output = malloc(MALLOC_SIZE);
 	int i;
-	for(i=0;i<MALLOC_SIZE;i++){
+	for (i = 0; i < MALLOC_SIZE; i++)
+	{
 		output[i] = 0;
 	}
 	strcat(output, word);
@@ -252,35 +323,48 @@ void decode(Dict *dict, Out **input)
 	while ((*input)->index != EOF_CODE)
 	{
 		code = (*input)->index;
+		int flag = (*input)->flag;
+		word = getEntryIndex(dict, code);
+		if (word != NULL)
+		{
+			if (flag == 1)
+			{
+				printf("\nWord: %s", word);
+				printf("\nOldWord: %s", oldWord);
+				reverseString(word);
+			}
 
-		word = getEntryIndex(dict,code);
-		if(word != NULL){
 			strcat(output, word);
+			printf("\nWord: %s", word);
+			printf("\nOldWord: %s", oldWord);
 			concatCharOnString(oldWord, word[0]);
-			addDictEntry(dict,oldWord,-1);
-			setString(oldWord,word);
-		}else{
+			printf("\nDict Entry: %s ",oldWord);
+			addDictEntry(dict, oldWord, -1);
+			setString(oldWord, word);
+		}
+		else
+		{
+			printf("\nREVERSE\n");
 			concatCharOnString(oldWord, oldWord[0]);
 			strcat(output, oldWord);
-			addDictEntry(dict,oldWord,-1);
-			printDict(dict);
+			addDictEntry(dict, oldWord, -1);
 		}
 		input++;
 	}
-
+	printDict(dict);
 	printf("%s", output);
 }
 
 int main()
 {
-	char *text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam quis elementum nibh. Maecenas fermentum volutpat turpis, id sollicitudin tellus vestibulum at. Mauris molestie turpis a venenatis malesuada. Cras ut laoreet enim. Nam id maximus quam. Mauris tempor blandit nunc id tempus. Fusce tincidunt velit nec enim porttitor ornare. Aliquam id vulputate nisl, eu tempor est. In ultrices et lacus sed lobortis. Suspendisse ligula dui, posuere molestie ultricies vitae, ultrices eget lorem. Donec sodales pharetra finibus. Duis vitae nisi eget ante facilisis blandit et vel arcu. Donec a facilisis augue. Sed auctor aliquet lectus sit amet consectetur. Integer nibh dui, pretium.";
+	char *text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce id risus turpis. Praesent blandit vulputate dictum. Vivamus cursus sed velit eu imperdiet. Phasellus quis arcu non ipsum posuere venenatis. Curabitur mauris est, efficitur sed sem vel, pellentesque pulvinar mauris. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Aenean sollicitudin leo dolor, congue imperdiet sem vulputate non. Cras eget est ultrices, bibendum mi et, lacinia ex. Integer ex diam, rutrum sed semper ut, dignissim at leo.Phasellus tristique bibendum finibus. Donec luctus purus eget erat pretium consequat. Curabitur tincidunt eleifend risus eu porttitor. Phasellus eu dolor pulvinar, commodo mi a, molestie tellus. Aliquam erat volutpat. Cras tempus pellentesque auctor. Praesent at vestibulum tellus.Integer posuere sodales turpis, non pulvinar massa mattis vel. Nulla a metus in erat pretium luctus in et arcu. Ut rhoncus nisi eu odio tempor hendrerit. Praesent ultrices tristique quam, non mollis lectus imperdiet vitae. Aenean in ultrices lacus. Nunc egestas orci nisl, id iaculis ligula porta ut. Maecenas iaculis a sapien a semper. Curabitur dictum elit at erat accumsan consectetur eget non ex. Nulla bibendum metus id fringilla ultrices. Duis porta risus quis arcu eleifend, in fringilla libero sagittis. Aliquam accumsan risus quis augue tristique, at lacinia diam aliquet. Etiam eget ipsum vel odio varius tempus. Nunc sed sapien porttitor, consectetur lectus viverra, sollicitudin eros.Fusce laoreet feugiat congue. Vestibulum interdum lectus vitae rutrum pretium. Vivamus semper imperdiet sem eget porttitor. Curabitur sit amet vehicula erat. Ut elementum condimentum turpis eget tempus. Mauris sit amet ultricies quam, eu faucibus massa. Proin luctus augue sapien, sit amet ultrices nunc fermentum sit amet. Nullam at mollis neque. Fusce a tincidunt purus.Morbi sollicitudin sapien justo, in consectetur dolor volutpat sed. Etiam at pharetra eros. Nullam maximus leo at arcu semper, vel sagittis nunc egestas.";
+
 	Dict *dict = (Dict *)malloc(sizeof(Dict));
 	initDict(dict);
-	printDict(dict);
 
-	Out** output = encode(dict, text);
+	Out **output = encode(dict, text);
 	clearDict(dict);
 	initDict(dict);
-	decode(dict,output);
+	decode(dict, output);
 	return 0;
 }
