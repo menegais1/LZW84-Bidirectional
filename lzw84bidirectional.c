@@ -21,15 +21,15 @@ typedef struct dict
 typedef struct out
 {
 	int index;
-	int flag;
+	char flag;
 } Out;
 
 #define EOF_CODE 0
-#define TEXT_MALLOC_SIZE 10000
+#define TEXT_MALLOC_SIZE 50000
 #define DICT_START 0
 #define DICT_END 127
 #define MAX_DICT_SIZE 5000
-
+#define FILE_MAX_CHAR_SIZE 50000
 
 
 void clearString(char *dest, int size)
@@ -75,6 +75,29 @@ void addDictEntry(Dict *dict, char *string, int code)
 	}
 }
 
+
+
+void printOutput(Out **output)
+{
+	int i = 0;
+	printf("\nOutput:\n (");
+	Out **temp = output;
+	while ((*temp)->index != EOF_CODE)
+	{
+		printf("(%d,%d) ", (*temp)->index, (*temp)->flag);
+		temp++;
+
+		i++;
+		if (i == 9)
+		{
+			printf("\n");
+			i = 0;
+		}
+	}
+	printf(")\n");
+}
+
+
 void initDict(Dict *dict)
 {
 	if (dict == NULL)
@@ -91,6 +114,104 @@ void initDict(Dict *dict)
 	}
 
 	addDictEntry(dict, 0, EOF_CODE);
+}
+
+char* loadTxtFileInMemory(char* path){
+	FILE* f = fopen(path, "r");
+	if(f == NULL){
+		printf("Não foi possivel ler o arquivo");
+		exit(0);
+	}
+	char* text = malloc(FILE_MAX_CHAR_SIZE);
+	char c;
+	int i=0;
+	if (fseek(f, 0, SEEK_END) < 0)
+		printf("Erro no seek");
+	long eof = ftell(f);
+	rewind(f);
+	while(eof != ftello(f)){
+		c = getc(f);
+		text[i] = c;
+		i++;
+		if(i >= FILE_MAX_CHAR_SIZE - 1){
+			break;
+		}
+	}
+	text[i] = 0;
+	fclose(f);
+	return text;
+}
+
+int getOutputSize(Out** output){
+	Out **temp = output;
+	int size = 1;
+	while ((*temp)->index != EOF_CODE)
+	{
+		size++;
+		temp++;
+	}
+
+	return size;
+}
+
+void saveTxtFileInMemory(char* path, char* str){
+	FILE* f = fopen(path,"w");
+	if(f == NULL){
+		printf("Não foi possivel ler o arquivo");
+		exit(0);
+	}
+	while(*str != 0){
+		fputc(*str, f);
+		str++;
+	}
+	fputc(0, f);
+	fclose(f);
+}
+
+void saveBinFileInMemory(char* path, Out** output){
+	FILE* f = fopen(path, "wb");
+	if(f == NULL){
+		printf("Não foi possivel ler o arquivo");
+		exit(0);
+	}
+	int outSize = getOutputSize(output);
+	int i;
+	Out* newOutput = malloc(outSize * sizeof(Out));
+	for(i=0;i<outSize;i++){
+		newOutput[i] = *(output[i]);
+	}
+	fwrite(newOutput,sizeof(Out), outSize, f);
+	fclose(f);
+}
+
+Out** loadBinFileInMemory(char* path){
+	FILE* f = fopen(path, "rb");
+	if(f == NULL){
+		printf("Não foi possivel ler o arquivo");
+		exit(0);
+	}
+
+	if (fseek(f, 0, SEEK_END) < 0)
+		printf("Erro no seek");
+	long eof = ftell(f);
+	rewind(f);
+	printf("%d", (int)eof);
+	Out* newOutput = malloc(eof);
+
+	fread(newOutput, sizeof(Out), eof / sizeof(Out), f);
+
+	Out** output;
+	output = malloc((eof/sizeof(Out)) * sizeof(Out*));
+	int i=0;
+	while((*newOutput).index != EOF_CODE){
+		output[i] = newOutput;
+		i++;
+		newOutput++;
+	}
+	output[i] = newOutput;
+
+	fclose(f);
+	return output;
 }
 
 void removeNode(Entry *node)
@@ -140,27 +261,6 @@ void printDict(Dict *dict)
 void setString(char *dest, char *src)
 {
 	strcpy(dest, src);
-}
-
-
-void printOutput(Out **output)
-{
-	int i = 0;
-	printf("\nOutput:\n (");
-	Out **temp = output;
-	while ((*temp)->index != EOF_CODE)
-	{
-		printf("(%d,%d) ", (*temp)->index, (*temp)->flag);
-		temp++;
-
-		i++;
-		if (i == 9)
-		{
-			printf("\n");
-			i = 0;
-		}
-	}
-	printf(")\n");
 }
 
 int getEntryString(Dict *dict, char *text, int *length)
@@ -359,7 +459,7 @@ Out **encode(Dict *dict, char *text)
 
 char *decode(Dict *dict, Out **input)
 {
-	// int currentTextTotalSize = TEXT_MALLOC_SIZE;
+	int currentTextTotalSize = TEXT_MALLOC_SIZE;
 	int oldCode;
 	int code = (*input)->index;
 	char *word = getEntryIndex(dict, code);
@@ -407,20 +507,22 @@ char *decode(Dict *dict, Out **input)
 
 int main()
 {
-	char *text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce id risus turpis. Praesent blandit vulputate dictum. Vivamus cursus sed velit eu imperdiet. Phasellus quis arcu non ipsum posuere venenatis. Curabitur mauris est, efficitur sed sem vel, pellentesque pulvinar mauris. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Aenean sollicitudin leo dolor, congue imperdiet sem vulputate non. Cras eget est ultrices, bibendum mi et, lacinia ex. Integer ex diam, rutrum sed semper ut, dignissim at leo.Phasellus tristique bibendum finibus. Donec luctus purus eget erat pretium consequat. Curabitur tincidunt eleifend risus eu porttitor. Phasellus eu dolor pulvinar, commodo mi a, molestie tellus. Aliquam erat volutpat. Cras tempus pellentesque auctor. Praesent at vestibulum tellus.Integer posuere sodales turpis, non pulvinar massa mattis vel. Nulla a metus in erat pretium luctus in et arcu. Ut rhoncus nisi eu odio tempor hendrerit. Praesent ultrices tristique quam, non mollis lectus imperdiet vitae. Aenean in ultrices lacus. Nunc egestas orci nisl, id iaculis ligula porta ut. Maecenas iaculis a sapien a semper. Curabitur dictum elit at erat accumsan consectetur eget non ex. Nulla bibendum metus id fringilla ultrices. Duis porta risus quis arcu eleifend, in fringilla libero sagittis. Aliquam accumsan risus quis augue tristique, at lacinia diam aliquet. Etiam eget ipsum vel odio varius tempus. Nunc sed sapien porttitor, consectetur lectus viverra, sollicitudin eros.Fusce laoreet feugiat congue. Vestibulum interdum lectus vitae rutrum pretium. Vivamus semper imperdiet sem eget porttitor. Curabitur sit amet vehicula erat. Ut elementum condimentum turpis eget tempus. Mauris sit amet ultricies quam, eu faucibus massa. Proin luctus augue sapien, sit amet ultrices nunc fermentum sit amet. Nullam at mollis neque. Fusce a tincidunt purus.Morbi sollicitudin sapien justo, in consectetur dolor volutpat sed. Etiam at pharetra eros. Nullam maximus leo at arcu semper, vel sagittis nunc egestas.";
+	// char *text = loadTxtFileInMemory("arq.txt");
 
 	Dict *dict = (Dict *)malloc(sizeof(Dict));
-	initDict(dict);
+	// initDict(dict);
 
-	Out **output = encode(dict, text);
-	// printOutput(output);
-	clearDict(dict);
+	// Out **output = encode(dict, text);
+	Out** output = loadBinFileInMemory("arq.bin");
+	// saveBinFileInMemory("arq.bin",output);
+	// // printOutput(output);
+	// clearDict(dict);
 	initDict(dict);
-	char *str = decode(dict, output);
-	// printOutput(output);
+	 char *str = decode(dict, output);
+	// // printOutput(output);
 
-	clearDict(dict);
-	printf("%s", str);
+	// clearDict(dict);
+	saveTxtFileInMemory("descomp.txt", str);
 
 	// free(output);
 	// free(str);
