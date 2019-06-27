@@ -25,12 +25,31 @@ typedef struct out
 } Out;
 
 #define EOF_CODE 0
-#define MALLOC_SIZE 10000
+#define TEXT_MALLOC_SIZE 10000
 #define DICT_START 0
 #define DICT_END 127
+#define MAX_DICT_SIZE 5000
+
+
+
+void clearString(char *dest, int size)
+{
+	int i;
+	for (i = 0; i < size; i++)
+		dest[i] = 0;
+}
+
+char* allocateString(int size){
+	char* tmp = (char*) malloc((size + 1) * sizeof(char));
+	clearString(tmp,size);
+	return tmp;
+}
+
 void addDictEntry(Dict *dict, char *string, int code)
 {
 	if (dict == NULL)
+		return;
+	if (dict->num + 1 > MAX_DICT_SIZE)
 		return;
 	Entry *new = (Entry *)malloc(sizeof(Entry));
 
@@ -40,7 +59,7 @@ void addDictEntry(Dict *dict, char *string, int code)
 	{
 		new->code = dict->num + 1;
 		dict->num = dict->num + 1;
-		new->string = (char *)malloc((strlen(string) + 1) * sizeof(char));
+		new->string = allocateString(strlen(string));
 		strcpy(new->string, string);
 	}
 
@@ -122,13 +141,24 @@ void setString(char *dest, char *src)
 {
 	strcpy(dest, src);
 }
-void printOutput(Out **output, int size)
+
+
+void printOutput(Out **output)
 {
 	int i = 0;
-	printf("\nOutput: (");
-	for (i = 0; i < size; i++)
+	printf("\nOutput:\n (");
+	Out **temp = output;
+	while ((*temp)->index != EOF_CODE)
 	{
-		printf("(%d,%d) ", output[i]->index, output[i]->flag);
+		printf("(%d,%d) ", (*temp)->index, (*temp)->flag);
+		temp++;
+
+		i++;
+		if (i == 9)
+		{
+			printf("\n");
+			i = 0;
+		}
 	}
 	printf(")\n");
 }
@@ -152,9 +182,13 @@ int getEntryString(Dict *dict, char *text, int *length)
 
 void reverseString(char *str)
 {
+	if (str == NULL)
+		return;
+	if (*str == 0)
+		return;
 	int length = strlen(str);
 	int i, j;
-	char *aux = malloc(length);
+	char *aux = allocateString(length + 1);
 	for (i = 0, j = length - 1; i < length; i++, j--)
 	{
 		aux[i] = str[j];
@@ -167,11 +201,10 @@ void reverseString(char *str)
 
 int getReverseEntryString(Dict *dict, char *text, int *length)
 {
-	if (dict == NULL)
+	if (dict == NULL || text == NULL)
 		return 0;
 	Entry *node = dict->root;
-	// printf("\nString: %s", text);
-	char *tmp = malloc(strlen(text));
+	char *tmp = allocateString(strlen(text) + 1);
 	setString(tmp, text);
 	reverseString(tmp);
 	// printf("\nReverse: %s", text);
@@ -198,7 +231,7 @@ char *getEntryIndex(Dict *dict, int index)
 	{
 		if (node->code == index)
 		{
-			char* temp = malloc(strlen(node->string));
+			char *temp = allocateString(strlen(node->string));
 			setString(temp, node->string);
 			return temp;
 		}
@@ -213,9 +246,27 @@ void concat(char *dest, char *src1, char *src2)
 	strcat(dest, src2);
 }
 
+// void dynamicConcat(char *dest, char *src1, int *destTotalSize)
+// {
+// 	if (strlen(dest) + strlen(src1) >= *destTotalSize - 1)
+// 	{
+// 		*destTotalSize = *destTotalSize * 1.5f;
+// 		printf("\n dest: %d", (int)strlen(dest));
+// 		printf("\n src: %d", (int)strlen(src1));
+// 		char *tmp = realloc(dest, *destTotalSize);
+// 		if (tmp == NULL)
+// 		{
+// 			printf("NÃO FOI POSSIVEL ALOCAR MAIS MEMÓRIA.");
+// 			exit(0);
+// 		}
+// 		dest = tmp;
+// 	}
+// 	strcat(dest, src1);
+// }
+
 void concatCharOnString(char *dest, char src)
 {
-	char *tmp = malloc(2);
+	char *tmp = allocateString(1);
 	tmp[0] = src;
 	tmp[1] = 0;
 	strcat(dest, tmp);
@@ -238,10 +289,10 @@ Out *initOut(int code, int flag)
 
 Out **encode(Dict *dict, char *text)
 {
-	char *prefix = malloc(MALLOC_SIZE);
-	char *currentChar = malloc(MALLOC_SIZE);
-	char *word = malloc(MALLOC_SIZE);
-	Out **output = (Out **)malloc(sizeof(Out *) * MALLOC_SIZE);
+	char *prefix = allocateString(TEXT_MALLOC_SIZE);
+	char *currentChar = allocateString(1);
+	char *word = allocateString(TEXT_MALLOC_SIZE);
+	Out **output = (Out **)malloc(sizeof(Out *) * strlen(text));
 	int code = 0;
 	int cont = 0;
 	int forwardMatch = 0;
@@ -290,8 +341,6 @@ Out **encode(Dict *dict, char *text)
 			addDictEntry(dict, word, -1);
 			setString(prefix, currentChar);
 			setCharOnString(currentChar, 0);
-			//printf("\nMatch: %d, reverse: %d", code, flag);
-
 			output[cont] = initOut(code, flag);
 			flag = 0;
 			cont++;
@@ -300,25 +349,26 @@ Out **encode(Dict *dict, char *text)
 
 	output[cont] = initOut(EOF_CODE, 0);
 	cont++;
-	printDict(dict);
-	// printOutput(output, cont);
+
+	free(prefix);
+	free(currentChar);
+	free(word);
+	prefix = currentChar = word = NULL;
 	return output;
 }
 
-void decode(Dict *dict, Out **input)
+char *decode(Dict *dict, Out **input)
 {
+	// int currentTextTotalSize = TEXT_MALLOC_SIZE;
 	int oldCode;
 	int code = (*input)->index;
 	char *word = getEntryIndex(dict, code);
-	char *oldWord = malloc(MALLOC_SIZE);
+	char *oldWord = allocateString(TEXT_MALLOC_SIZE);
+	char *output = allocateString(TEXT_MALLOC_SIZE);
 	setString(oldWord, word);
-	char *output = malloc(MALLOC_SIZE);
-	int i;
-	for (i = 0; i < MALLOC_SIZE; i++)
-	{
-		output[i] = 0;
-	}
+	setCharOnString(output, 0);
 	strcat(output, word);
+	// dynamicConcat(output, word, &currentTextTotalSize);
 	input++;
 	while ((*input)->index != EOF_CODE)
 	{
@@ -329,16 +379,13 @@ void decode(Dict *dict, Out **input)
 		{
 			if (flag == 1)
 			{
-				printf("\nWord: %s", word);
-				printf("\nOldWord: %s", oldWord);
 				reverseString(word);
 			}
 
 			strcat(output, word);
-			printf("\nWord: %s", word);
-			printf("\nOldWord: %s", oldWord);
+
+			// dynamicConcat(output, word, &currentTextTotalSize);
 			concatCharOnString(oldWord, word[0]);
-			printf("\nDict Entry: %s ",oldWord);
 			addDictEntry(dict, oldWord, -1);
 			setString(oldWord, word);
 		}
@@ -347,12 +394,15 @@ void decode(Dict *dict, Out **input)
 			printf("\nREVERSE\n");
 			concatCharOnString(oldWord, oldWord[0]);
 			strcat(output, oldWord);
+			// dynamicConcat(output, oldWord, &currentTextTotalSize);
 			addDictEntry(dict, oldWord, -1);
 		}
 		input++;
 	}
-	printDict(dict);
-	printf("%s", output);
+	// printDict(dict);
+
+	free(oldWord);
+	return output;
 }
 
 int main()
@@ -363,8 +413,16 @@ int main()
 	initDict(dict);
 
 	Out **output = encode(dict, text);
+	// printOutput(output);
 	clearDict(dict);
 	initDict(dict);
-	decode(dict, output);
+	char *str = decode(dict, output);
+	// printOutput(output);
+
+	clearDict(dict);
+	printf("%s", str);
+
+	// free(output);
+	// free(str);
 	return 0;
 }
