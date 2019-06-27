@@ -28,7 +28,7 @@ typedef struct out
 #define TEXT_MALLOC_SIZE 50000
 #define DICT_START 0
 #define DICT_END 127
-#define MAX_DICT_SIZE 5000
+#define MAX_DICT_SIZE 4096
 #define FILE_MAX_CHAR_SIZE 50000
 
 void clearString(char *dest, int size)
@@ -36,6 +36,15 @@ void clearString(char *dest, int size)
 	int i;
 	for (i = 0; i < size; i++)
 		dest[i] = 0;
+}
+
+
+Out *initOut(int code, int flag)
+{
+	Out *out = (Out *)malloc(sizeof(Out));
+	out->index = code;
+	out->flag = flag;
+	return out;
 }
 
 char *allocateString(int size)
@@ -188,7 +197,19 @@ void saveBinFileInMemory(char *path, Out **output)
 		newOutput[i] = *(output[i]);
 	}
 
-	fwrite(newOutput, sizeof(Out), outSize, f);
+	for(i =0;i < outSize;i++){
+		unsigned char lsb = (unsigned) newOutput[i].index & 0xff;
+		unsigned char msb = (unsigned) newOutput[i].index >> 8;
+
+		msb = msb | (newOutput[i].flag << 4);
+
+		unsigned char* info = malloc(2);
+		info[0] = lsb;
+		info[1] = msb;
+		fwrite(info,2,1,f);
+		free(info);
+	}
+
 	fclose(f);
 	free(newOutput);
 	newOutput = NULL;
@@ -207,21 +228,25 @@ Out **loadBinFileInMemory(char *path)
 		printf("Erro no seek");
 	long eof = ftell(f);
 	rewind(f);
-	printf("%d", (int)eof);
-	Out *newOutput = malloc(eof);
-
-	fread(newOutput, sizeof(Out), eof / sizeof(Out), f);
-
+	
+	int i;
 	Out **output;
-	output = malloc((eof / sizeof(Out)) * sizeof(Out *));
-	int i = 0;
-	while ((*newOutput).index != EOF_CODE)
-	{
-		output[i] = newOutput;
-		i++;
-		newOutput++;
+	output = malloc((eof / 2) * sizeof(Out *));
+	for(i=0;i < eof / 2;i++){
+		unsigned char* info = malloc(2);
+		fread(info,2,1,f);
+
+		unsigned char lsb = info[0];
+		unsigned char msb = info[1];
+		unsigned int index = (unsigned) lsb;
+		unsigned int indexMsb = (unsigned) msb;
+		index = index | (indexMsb << 8);
+		index = index << 20;
+		index = index >> 20;	
+		unsigned int flag = msb >> 4;
+		output[i] = initOut((int) index, (char) flag);
+		free(info);
 	}
-	output[i] = newOutput;
 
 	fclose(f);
 	return output;
@@ -392,14 +417,6 @@ void setCharOnString(char *dest, char src)
 	dest[1] = 0;
 }
 
-Out *initOut(int code, int flag)
-{
-	Out *out = (Out *)malloc(sizeof(Out));
-	out->index = code;
-	out->flag = flag;
-	return out;
-}
-
 Out **encode(Dict *dict, char *text)
 {
 	char *prefix = allocateString(TEXT_MALLOC_SIZE);
@@ -506,7 +523,6 @@ char *decode(Dict *dict, Out **input)
 		}
 		else
 		{
-			printf("\nREVERSE\n");
 			concatCharOnString(oldWord, oldWord[0]);
 			strcat(output, oldWord);
 			// dynamicConcat(output, oldWord, &currentTextTotalSize);
@@ -562,6 +578,7 @@ int main()
 			Out **encodedTxt = loadBinFileInMemory(filePath);
 			initDict(dict);
 			char *outputDecoded = decode(dict, encodedTxt);
+			printf("\nStr: %s",outputDecoded);
 			saveTxtFileInMemory("DECODED.txt", outputDecoded);
 			clearDict(dict);
 			*filePath = 0;
