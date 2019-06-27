@@ -25,12 +25,10 @@ typedef struct out
 } Out;
 
 #define EOF_CODE 0
-#define TEXT_MALLOC_SIZE 10000
+#define TEXT_MALLOC_SIZE 50000
 #define DICT_START 0
 #define DICT_END 127
 #define MAX_DICT_SIZE 5000
-
-
 
 void clearString(char *dest, int size)
 {
@@ -39,9 +37,10 @@ void clearString(char *dest, int size)
 		dest[i] = 0;
 }
 
-char* allocateString(int size){
-	char* tmp = (char*) malloc((size + 1) * sizeof(char));
-	clearString(tmp,size);
+char *allocateString(int size)
+{
+	char *tmp = (char *)malloc((size + 1) * sizeof(char));
+	clearString(tmp, size);
 	return tmp;
 }
 
@@ -141,7 +140,6 @@ void setString(char *dest, char *src)
 {
 	strcpy(dest, src);
 }
-
 
 void printOutput(Out **output)
 {
@@ -368,6 +366,7 @@ char *decode(Dict *dict, Out **input)
 	setString(oldWord, word);
 	setCharOnString(output, 0);
 	strcat(output, word);
+	free(word);
 	// dynamicConcat(output, word, &currentTextTotalSize);
 	input++;
 	while ((*input)->index != EOF_CODE)
@@ -388,6 +387,7 @@ char *decode(Dict *dict, Out **input)
 			concatCharOnString(oldWord, word[0]);
 			addDictEntry(dict, oldWord, -1);
 			setString(oldWord, word);
+			free(word);
 		}
 		else
 		{
@@ -407,7 +407,7 @@ char *decode(Dict *dict, Out **input)
 
 int main()
 {
-	char *text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce id risus turpis. Praesent blandit vulputate dictum. Vivamus cursus sed velit eu imperdiet. Phasellus quis arcu non ipsum posuere venenatis. Curabitur mauris est, efficitur sed sem vel, pellentesque pulvinar mauris. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Aenean sollicitudin leo dolor, congue imperdiet sem vulputate non. Cras eget est ultrices, bibendum mi et, lacinia ex. Integer ex diam, rutrum sed semper ut, dignissim at leo.Phasellus tristique bibendum finibus. Donec luctus purus eget erat pretium consequat. Curabitur tincidunt eleifend risus eu porttitor. Phasellus eu dolor pulvinar, commodo mi a, molestie tellus. Aliquam erat volutpat. Cras tempus pellentesque auctor. Praesent at vestibulum tellus.Integer posuere sodales turpis, non pulvinar massa mattis vel. Nulla a metus in erat pretium luctus in et arcu. Ut rhoncus nisi eu odio tempor hendrerit. Praesent ultrices tristique quam, non mollis lectus imperdiet vitae. Aenean in ultrices lacus. Nunc egestas orci nisl, id iaculis ligula porta ut. Maecenas iaculis a sapien a semper. Curabitur dictum elit at erat accumsan consectetur eget non ex. Nulla bibendum metus id fringilla ultrices. Duis porta risus quis arcu eleifend, in fringilla libero sagittis. Aliquam accumsan risus quis augue tristique, at lacinia diam aliquet. Etiam eget ipsum vel odio varius tempus. Nunc sed sapien porttitor, consectetur lectus viverra, sollicitudin eros.Fusce laoreet feugiat congue. Vestibulum interdum lectus vitae rutrum pretium. Vivamus semper imperdiet sem eget porttitor. Curabitur sit amet vehicula erat. Ut elementum condimentum turpis eget tempus. Mauris sit amet ultricies quam, eu faucibus massa. Proin luctus augue sapien, sit amet ultrices nunc fermentum sit amet. Nullam at mollis neque. Fusce a tincidunt purus.Morbi sollicitudin sapien justo, in consectetur dolor volutpat sed. Etiam at pharetra eros. Nullam maximus leo at arcu semper, vel sagittis nunc egestas.";
+	char *text = "aabaacda";
 
 	Dict *dict = (Dict *)malloc(sizeof(Dict));
 	initDict(dict);
@@ -417,12 +417,26 @@ int main()
 	clearDict(dict);
 	initDict(dict);
 	char *str = decode(dict, output);
-	// printOutput(output);
-
-	clearDict(dict);
+	printOutput(output);
 	printf("%s", str);
 
-	// free(output);
-	// free(str);
+
+	//FREEING ALL ALLOCATED MEMORY
+	clearDict(dict);
+	Out **temp = output;
+	while ((*temp)->index != EOF_CODE)
+	{
+		free(*temp);
+		temp++;
+	}
+	free(*temp);
+	free(output);
+	free(str);
+	free(dict);
+	output = NULL;
+	str = NULL;
+	dict = NULL;
+
+
 	return 0;
 }
