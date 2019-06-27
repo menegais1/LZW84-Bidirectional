@@ -20,8 +20,8 @@ typedef struct dict
 
 typedef struct out
 {
+	char flag;
 	int index;
-	int flag;
 } Out;
 
 #define EOF_CODE 0
@@ -29,6 +29,7 @@ typedef struct out
 #define DICT_START 0
 #define DICT_END 127
 #define MAX_DICT_SIZE 5000
+#define FILE_MAX_CHAR_SIZE 50000
 
 void clearString(char *dest, int size)
 {
@@ -74,6 +75,26 @@ void addDictEntry(Dict *dict, char *string, int code)
 	}
 }
 
+void printOutput(Out **output)
+{
+	int i = 0;
+	printf("\nOutput:\n (");
+	Out **temp = output;
+	while ((*temp)->index != EOF_CODE)
+	{
+		printf("(%d,%d) ", (*temp)->index, (*temp)->flag);
+		temp++;
+
+		i++;
+		if (i == 9)
+		{
+			printf("\n");
+			i = 0;
+		}
+	}
+	printf(")\n");
+}
+
 void initDict(Dict *dict)
 {
 	if (dict == NULL)
@@ -92,6 +113,120 @@ void initDict(Dict *dict)
 	addDictEntry(dict, 0, EOF_CODE);
 }
 
+char *loadTxtFileInMemory(char *path)
+{
+	FILE *f = fopen(path, "r");
+	if (f == NULL)
+	{
+		printf("Não foi possivel ler o arquivo");
+		exit(0);
+	}
+	char *text = malloc(FILE_MAX_CHAR_SIZE);
+	char c;
+	int i = 0;
+	if (fseek(f, 0, SEEK_END) < 0)
+		printf("Erro no seek");
+	long eof = ftell(f);
+	rewind(f);
+	while (eof != ftello(f))
+	{
+		c = getc(f);
+		text[i] = c;
+		i++;
+		if (i >= FILE_MAX_CHAR_SIZE - 1)
+		{
+			break;
+		}
+	}
+	text[i] = 0;
+	fclose(f);
+	return text;
+}
+
+int getOutputSize(Out **output)
+{
+	Out **temp = output;
+	int size = 1;
+	while ((*temp)->index != EOF_CODE)
+	{
+		size++;
+		temp++;
+	}
+
+	return size;
+}
+
+void saveTxtFileInMemory(char *path, char *str)
+{
+	FILE *f = fopen(path, "w");
+	if (f == NULL)
+	{
+		printf("Não foi possivel ler o arquivo");
+		exit(0);
+	}
+	while (*str != 0)
+	{
+		fputc(*str, f);
+		str++;
+	}
+	fclose(f);
+}
+
+void saveBinFileInMemory(char *path, Out **output)
+{
+	FILE *f = fopen(path, "wb");
+	if (f == NULL)
+	{
+		printf("Não foi possivel ler o arquivo");
+		exit(0);
+	}
+	int outSize = getOutputSize(output);
+	int i;
+	Out *newOutput = malloc(outSize * sizeof(Out));
+	for (i = 0; i < outSize; i++)
+	{
+		newOutput[i] = *(output[i]);
+	}
+
+	fwrite(newOutput, sizeof(Out), outSize, f);
+	fclose(f);
+	free(newOutput);
+	newOutput = NULL;
+}
+
+Out **loadBinFileInMemory(char *path)
+{
+	FILE *f = fopen(path, "rb");
+	if (f == NULL)
+	{
+		printf("Não foi possivel ler o arquivo");
+		exit(0);
+	}
+
+	if (fseek(f, 0, SEEK_END) < 0)
+		printf("Erro no seek");
+	long eof = ftell(f);
+	rewind(f);
+	printf("%d", (int)eof);
+	Out *newOutput = malloc(eof);
+
+	fread(newOutput, sizeof(Out), eof / sizeof(Out), f);
+
+	Out **output;
+	output = malloc((eof / sizeof(Out)) * sizeof(Out *));
+	int i = 0;
+	while ((*newOutput).index != EOF_CODE)
+	{
+		output[i] = newOutput;
+		i++;
+		newOutput++;
+	}
+	output[i] = newOutput;
+
+	fclose(f);
+	return output;
+}
+
 void removeNode(Entry *node)
 {
 	if (node == NULL)
@@ -107,7 +242,7 @@ void removeNode(Entry *node)
 
 void clearDict(Dict *dict)
 {
-	if (dict == NULL)
+	if (dict == NULL || dict->root == NULL)
 		return;
 
 	removeNode(dict->root);
@@ -139,26 +274,6 @@ void printDict(Dict *dict)
 void setString(char *dest, char *src)
 {
 	strcpy(dest, src);
-}
-
-void printOutput(Out **output)
-{
-	int i = 0;
-	printf("\nOutput:\n (");
-	Out **temp = output;
-	while ((*temp)->index != EOF_CODE)
-	{
-		printf("(%d,%d) ", (*temp)->index, (*temp)->flag);
-		temp++;
-
-		i++;
-		if (i == 9)
-		{
-			printf("\n");
-			i = 0;
-		}
-	}
-	printf(")\n");
 }
 
 int getEntryString(Dict *dict, char *text, int *length)
@@ -357,7 +472,7 @@ Out **encode(Dict *dict, char *text)
 
 char *decode(Dict *dict, Out **input)
 {
-	// int currentTextTotalSize = TEXT_MALLOC_SIZE;
+	int currentTextTotalSize = TEXT_MALLOC_SIZE;
 	int oldCode;
 	int code = (*input)->index;
 	char *word = getEntryIndex(dict, code);
@@ -399,30 +514,13 @@ char *decode(Dict *dict, Out **input)
 		}
 		input++;
 	}
-	// printDict(dict);
 
 	free(oldWord);
 	return output;
 }
 
-int main()
+void freeOut(Out **output)
 {
-	char *text = "aabaacda";
-
-	Dict *dict = (Dict *)malloc(sizeof(Dict));
-	initDict(dict);
-
-	Out **output = encode(dict, text);
-	// printOutput(output);
-	clearDict(dict);
-	initDict(dict);
-	char *str = decode(dict, output);
-	printOutput(output);
-	printf("%s", str);
-
-
-	//FREEING ALL ALLOCATED MEMORY
-	clearDict(dict);
 	Out **temp = output;
 	while ((*temp)->index != EOF_CODE)
 	{
@@ -430,13 +528,61 @@ int main()
 		temp++;
 	}
 	free(*temp);
-	free(output);
-	free(str);
-	free(dict);
-	output = NULL;
-	str = NULL;
-	dict = NULL;
+}
 
+int main()
+{
+	int opt = 0;
+	Dict *dict = (Dict *)malloc(sizeof(Dict));
+	char *filePath = malloc(100);
+	do
+	{
+		printf("\nOlá!!!");
+		printf("\nPara comprimir um arquivo, digite 1:");
+		printf("\nPara descomprimir um arquivo, digite 2:");
+		printf("\nPara sair, digite 99:\n");
+		scanf("%d", &opt);
+
+		switch (opt)
+		{
+		case 1:
+			printf("\nInsira o caminho do arquivo a ser comprimido: ");
+			scanf("%s", filePath);
+			char *txt = loadTxtFileInMemory(filePath);
+			initDict(dict);
+			Out **outputEncoded = encode(dict, txt);
+			saveBinFileInMemory("ENCODED.bin", outputEncoded);
+			freeOut(outputEncoded);
+			free(outputEncoded);
+			free(txt);
+			break;
+		case 2:
+			printf("\nInsira o caminho do arquivo a ser descomprimido: ");
+			scanf("%s", filePath);
+			Out **encodedTxt = loadBinFileInMemory(filePath);
+			initDict(dict);
+			char *outputDecoded = decode(dict, encodedTxt);
+			saveTxtFileInMemory("DECODED.txt", outputDecoded);
+			clearDict(dict);
+			*filePath = 0;
+			freeOut(encodedTxt);
+			//free(encodedTxt);
+
+			//free(outputDecoded);
+			break;
+		case 99:
+			printf("\nAté mais!!");
+			break;
+		default:
+			break;
+		}
+	} while (opt != 99);
+
+	clearDict(dict);
+	free(dict);
+	free(filePath);
+	dict = NULL;
+	filePath = NULL;
 
 	return 0;
 }
